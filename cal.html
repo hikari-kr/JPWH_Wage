@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>일본 워홀 알바 시급 계산기 (2026 v1.0)</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    body { margin: 24px; max-width: 980px; }
+    h1 { margin: 0 0 16px; }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 12px 0; }
+    label { display: block; margin: 10px 0 6px; font-weight: 700; }
+    select, input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .hint { color: #555; font-size: 13px; margin-top: 6px; }
+    .warn { color: #a04; font-size: 13px; margin-top: 6px; }
+    .result { font-size: 16px; line-height: 1.7; }
+    .result strong { font-size: 18px; }
+    .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #f3f3f3; margin-left: 6px; font-size: 12px; }
+    .footer { margin-top: 18px; color: #666; font-size: 12px; line-height: 1.6; }
+    button { padding: 10px 12px; border: 1px solid #ccc; border-radius: 10px; background: #fff; cursor: pointer; }
+    button:hover { background: #f7f7f7; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    hr { border: none; border-top: 1px solid #eee; margin: 12px 0; }
+  </style>
+</head>
+<body>
+  <h1>일본 워홀 알바 시급 계산기 <span class="pill">2026 v1.0</span></h1>
+
+  <div class="card">
+    <h2>01. 지역 선택 (최저시급 안내)</h2>
+    <label for="region">지역(도도부현)</label>
+    <select id="region"></select>
+    <div id="minWageInfo" class="hint"></div>
+    <div class="hint">
+      ※ 최저시급은 연도/지역에 따라 변동될 수 있습니다. (데이터: 2026년 기준 후생노동성 제공)
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>02. 공제 조건 선택 (통합 공제율)</h2>
+
+    <div class="row">
+      <div>
+        <label for="residency">거주자/비거주자</label>
+        <select id="residency">
+          <option value="nonresident">비거주자</option>
+          <option value="resident">거주자</option>
+        </select>
+        <div class="hint">판정은 개인별 상황/회사 처리에 따라 달라질 수 있어 선택형으로 제공합니다.</div>
+      </div>
+
+      <div>
+        <label for="socialInsurance">사회보험</label>
+        <select id="socialInsurance">
+          <option value="no">미가입</option>
+          <option value="yes">가입</option>
+        </select>
+        <div class="hint">v1.0은 “통합 공제율(고정)”로 단순 계산합니다.</div>
+      </div>
+    </div>
+
+    <label for="deductionRate">통합 공제율(자동 적용, %)</label>
+    <input id="deductionRate" type="number" step="0.001" min="0" max="100" readonly />
+    <div class="hint">
+      공제율 프리셋(제작자 제공):<br/>
+      비거주+가입 34.825% / 비거주+미가입 20.42% / 거주+가입 19.405% / 거주+미가입 5%
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>03. 시급 및 노동시간</h2>
+
+    <div class="row">
+      <div>
+        <label for="hourlyWage">시급(엔)</label>
+        <input id="hourlyWage" type="number" min="0" step="1" />
+        <div id="wageHint" class="hint"></div>
+        <div id="wageError" class="warn" style="display:none;"></div>
+      </div>
+
+      <div>
+        <label for="hours">노동시간(시간)</label>
+        <input id="hours" type="number" min="0" step="0.25" />
+        <div class="hint">예: 4시간 30분 = 4.5</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="period">기간</label>
+        <select id="period">
+          <option value="day">일급(입력한 시간 = 하루)</option>
+          <option value="week">주급(입력한 시간 = 1주 합계)</option>
+          <option value="month">월급(입력한 시간 = 1달 합계)</option>
+        </select>
+      </div>
+
+      <div style="display:flex;align-items:end;gap:10px;">
+        <button id="fillMinWageBtn" type="button">시급에 최저시급 넣기</button>
+        <button id="resetBtn" type="button">초기화</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>04. 결과</h2>
+    <div class="result" id="result"></div>
+  </div>
+
+  <div class="footer">
+    <div><strong>계산식</strong></div>
+    <div>세전 = 시급 × 시간</div>
+    <div>공제 = 세전 × 통합 공제율</div>
+    <div>세후 = 세전 − 공제</div>
+    <hr />
+    <div>※ 본 도구는 “순수 시급×시간” 기준의 단순 계산기(v1.0)입니다. 교통비/식대/구간 과세/기타 공제 항목은 반영하지 않습니다.</div>
+    <div>Copyright©2026 by 히카비카</div>
+  </div>
+
+<script>
+  // ====== 2026년 지역별 최저시급 (사용자 제공) ======
+  const MIN_WAGE_BY_REGION = {
+    "홋카이도": 1075,
+    "아오모리": 1029,
+    "이와테": 1031,
+    "미야기": 1038,
+    "아키타": 1031,
+    "야마가타": 1032,
+    "후쿠시마": 1033,
+    "이바라키": 1074,
+    "도치기": 1068,
+    "군마": 1063,
+    "사이타마": 1141,
+    "지바": 1140,
+    "도쿄": 1226,
+    "가나가와": 1225,
+    "니가타": 1050,
+    "도야마": 1062,
+    "이시카와": 1054,
+    "후쿠이": 1053,
+    "야마나시": 1052,
+    "나가노": 1061,
+    "기후": 1065,
+    "시즈오카": 1097,
+    "아이치": 1140,
+    "미에": 1087,
+    "시가": 1080,
+    "교토": 1122,
+    "오사카": 1177,
+    "효고": 1116,
+    "나라": 1051,
+    "와카야마": 1045,
+    "돗토리": 1030,
+    "시마네": 1033,
+    "오카야마": 1047,
+    "히로시마": 1085,
+    "야마구치": 1043,
+    "도쿠시마": 1046,
+    "가가와": 1036,
+    "에히메": 1033,
+    "고치": 1023,
+    "후쿠오카": 1057,
+    "사가": 1030,
+    "나가사키": 1031,
+    "구마모토": 1034,
+    "오이타": 1035,
+    "미야자키": 1023,
+    "가고시마": 1026,
+    "오키나와": 1023
+  };
+
+  // ====== 통합 공제율 프리셋(사용자 제공) ======
+  const DEDUCTION_PRESET = {
+    nonresident: { // 비거주자
+      yes: 34.825,
+      no:  20.42
+    },
+    resident: {    // 거주자
+      yes: 19.405,
+      no:  5.0
+    }
+  };
+
+  // ====== DOM ======
+  const regionEl = document.getElementById('region');
+  const minWageInfoEl = document.getElementById('minWageInfo');
+
+  const residencyEl = document.getElementById('residency');
+  const socialInsuranceEl = document.getElementById('socialInsurance');
+  const deductionRateEl = document.getElementById('deductionRate');
+
+  const hourlyWageEl = document.getElementById('hourlyWage');
+  const hoursEl = document.getElementById('hours');
+  const periodEl = document.getElementById('period');
+
+  const wageHintEl = document.getElementById('wageHint');
+  const wageErrorEl = document.getElementById('wageError');
+
+  const resultEl = document.getElementById('result');
+  const fillMinWageBtn = document.getElementById('fillMinWageBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  function formatJPY(n) {
+    const rounded = Math.round(n);
+    return rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "円";
+  }
+
+  function getSelectedMinWage() {
+    const region = regionEl.value;
+    return MIN_WAGE_BY_REGION[region] ?? 0;
+  }
+
+  function getDeductionRatePercent() {
+    const residency = residencyEl.value;     // "resident" | "nonresident"
+    const si = socialInsuranceEl.value;      // "yes" | "no"
+    return DEDUCTION_PRESET[residency][si];  // percent number
+  }
+
+  function updateDeductionUI() {
+    const rate = getDeductionRatePercent();
+    deductionRateEl.value = rate.toFixed(3);
+  }
+
+  function updateRegionUI() {
+    const minWage = getSelectedMinWage();
+    minWageInfoEl.textContent = `선택 지역 최저시급: ${minWage}円 (2026 기준)`;
+    hourlyWageEl.min = String(minWage);
+    wageHintEl.textContent = `시급은 ${minWage}円 이상만 입력 가능`;
+  }
+
+  function validateWage() {
+    const minWage = getSelectedMinWage();
+    const wage = Number(hourlyWageEl.value || 0);
+
+    if (wage > 0 && wage < minWage) {
+      wageErrorEl.style.display = "block";
+      wageErrorEl.textContent = `입력한 시급(${wage}円)가 최저시급(${minWage}円)보다 낮습니다.`;
+      return false;
+    } else {
+      wageErrorEl.style.display = "none";
+      wageErrorEl.textContent = "";
+      return true;
+    }
+  }
+
+  function calc() {
+    const ok = validateWage();
+
+    const wage = Number(hourlyWageEl.value || 0);
+    const hours = Number(hoursEl.value || 0);
+    const gross = wage * hours;
+
+    const ratePercent = getDeductionRatePercent();
+    const rate = ratePercent / 100;
+
+    const deduction = gross * rate;
+    const net = gross - deduction;
+
+    const periodText = periodEl.options[periodEl.selectedIndex].text;
+    const region = regionEl.value;
+    const minWage = getSelectedMinWage();
+
+    resultEl.innerHTML = `
+      <div><strong>세전:</strong> <span class="mono">${formatJPY(gross)}</span></div>
+      <div>공제(통합 ${ratePercent.toFixed(3)}%): <span class="mono">${formatJPY(deduction)}</span></div>
+      <div><strong>세후:</strong> <span class="mono">${formatJPY(net)}</span></div>
+      <hr />
+      <div class="hint">
+        지역: ${region} (최저시급 ${minWage}円) / ${periodText}<br/>
+        ${ ok ? "" : "⚠️ 최저시급 미달 입력이 감지되었습니다." }
+      </div>
+    `;
+  }
+
+  function init() {
+    // 지역 옵션 채우기(가나다순)
+    const regions = Object.keys(MIN_WAGE_BY_REGION).sort((a,b)=>a.localeCompare(b,'ko'));
+    for (const r of regions) {
+      const opt = document.createElement('option');
+      opt.value = r;
+      opt.textContent = r;
+      regionEl.appendChild(opt);
+    }
+
+    // 기본값
+    regionEl.value = "도쿄";
+    residencyEl.value = "nonresident";
+    socialInsuranceEl.value = "no";
+
+    updateRegionUI();
+    updateDeductionUI();
+
+    hourlyWageEl.value = String(getSelectedMinWage());
+    hoursEl.value = "40";
+    periodEl.value = "week";
+
+    calc();
+  }
+
+  // ====== 이벤트 ======
+  regionEl.addEventListener('change', () => {
+    updateRegionUI();
+    const minWage = getSelectedMinWage();
+    const wage = Number(hourlyWageEl.value || 0);
+    if (wage > 0 && wage < minWage) hourlyWageEl.value = String(minWage);
+    calc();
+  });
+
+  residencyEl.addEventListener('change', () => { updateDeductionUI(); calc(); });
+  socialInsuranceEl.addEventListener('change', () => { updateDeductionUI(); calc(); });
+
+  hourlyWageEl.addEventListener('input', () => { validateWage(); calc(); });
+  hoursEl.addEventListener('input', calc);
+  periodEl.addEventListener('change', calc);
+
+  fillMinWageBtn.addEventListener('click', () => {
+    hourlyWageEl.value = String(getSelectedMinWage());
+    calc();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    regionEl.value = "도쿄";
+    residencyEl.value = "nonresident";
+    socialInsuranceEl.value = "no";
+    updateRegionUI();
+    updateDeductionUI();
+    hourlyWageEl.value = String(getSelectedMinWage());
+    hoursEl.value = "0";
+    periodEl.value = "day";
+    calc();
+  });
+
+  init();
+</script>
+</body>
+</html>
